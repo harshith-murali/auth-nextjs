@@ -2,6 +2,7 @@ import { connectToDb } from "@/db/dbConfig";
 import User from "@/models/userModel.js";
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import { sendEmail } from "@/helpers/mailer";
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,6 +40,11 @@ export async function POST(request: NextRequest) {
       username,
       email: emailLower,
       password: hashedPassword,
+    });
+
+    // send verification email
+    await sendEmail({
+      email , emailType: "VERIFY", userId: newUser._id,
     });
 
     return NextResponse.json({
