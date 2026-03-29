@@ -2,13 +2,27 @@ import { connectToDb } from "@/db/dbConfig";
 import User from "@/models/userModel";
 import { NextRequest, NextResponse } from "next/server";
 import { sendEmail } from "@/helpers/mailer";
+import { rateLimit } from "@/utils/rateLimit";
 
 export async function POST(request: NextRequest) {
   try {
     await connectToDb();
 
-    const { email, type } = await request.json();
-    // type = "LINK" | "OTP"
+    const { email, type = "LINK" } = await request.json();
+
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0] || "unknown";
+
+    const key = `${ip}-${email}`;
+
+    const { success } = rateLimit(key, 3, 60 * 1000);
+
+    if (!success) {
+      return NextResponse.json(
+        { error: "Too many requests. Try later." },
+        { status: 429 }
+      );
+    }
 
     if (!email) {
       return NextResponse.json(
@@ -17,37 +31,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const validTypes = ["LINK", "OTP"];
+    const resetType = validTypes.includes(type) ? type : "LINK";
+
     const user = await User.findOne({ email });
 
+    // 🔐 Hide user existence
     if (!user) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 400 }
-      );
+      return NextResponse.json({
+        success: true,
+        message: "If account exists, email sent",
+      });
     }
 
     // 🔥 OTP FLOW
-    if (type === "OTP") {
+    if (resetType === "OTP") {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
-      user.resetPasswordOtp = otp;
-      user.resetPasswordOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 min
-
-      await user.save();
 
       await sendEmail({
         email: user.email,
         emailType: "RESET_OTP",
         userId: user._id.toString(),
-        otp, // 👈 pass OTP
+        otp,
       });
 
       return NextResponse.json({
         success: true,
-        message: "OTP sent to email",
+        message: "OTP sent if account exists",
       });
     }
 
+    // 🔥 LINK FLOW
     await sendEmail({
       email: user.email,
       emailType: "RESET",
@@ -56,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "Reset link sent to email",
+      message: "Reset link sent if account exists",
     });
 
   } catch (error: any) {
