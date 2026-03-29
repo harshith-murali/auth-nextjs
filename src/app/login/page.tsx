@@ -29,7 +29,7 @@ const LoginPage = () => {
     try {
       setLoading(true);
 
-      const response = await axios.post("/api/login", user);
+      await axios.post("/api/login", user);
 
       toast.success("Login successful!");
       router.push("/profile");
@@ -82,7 +82,7 @@ const LoginPage = () => {
           </div>
 
           {/* Password */}
-          <div className="mb-6">
+          <div className="mb-2">
             <label className="text-gray-600 text-sm mb-1 block">
               Password
             </label>
@@ -96,6 +96,16 @@ const LoginPage = () => {
                 setUser({ ...user, password: e.target.value })
               }
             />
+          </div>
+
+          {/* Forgot Password */}
+          <div className="flex justify-end mb-6">
+            <Link
+              href="/forgot-password"
+              className="text-sm text-blue-600 hover:underline font-medium"
+            >
+              Forgot Password?
+            </Link>
           </div>
 
           {/* Button */}
@@ -113,7 +123,7 @@ const LoginPage = () => {
           </button>
         </form>
 
-        {/* Link */}
+        {/* Register */}
         <p className="text-center mt-5 text-gray-600 text-sm">
           Don't have an account?{" "}
           <Link

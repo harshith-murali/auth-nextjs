@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 import User from "@/models/userModel";
 import crypto from "crypto";
 
-var transport = nodemailer.createTransport({
+const transport = nodemailer.createTransport({
   host: "sandbox.smtp.mailtrap.io",
   port: 2525,
   auth: {
@@ -21,36 +21,50 @@ export const sendEmail = async ({
   userId: string;
 }) => {
   try {
-    const token = crypto.randomBytes(32).toString("hex");
+    // 🔐 generate tokens
+    const rawToken = crypto.randomBytes(32).toString("hex");
 
-    // store token
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(rawToken)
+      .digest("hex");
+
+    // 🧠 find user
+    const user = await User.findById(userId);
+    if (!user) throw new Error("User not found");
+
+    // 🧾 store hashed token in DB
     if (emailType === "VERIFY") {
-      await User.findByIdAndUpdate(userId, {
-        verifyToken: token,
-        verifyTokenExpiry: Date.now() + 3600000,
-      });
+      user.verifyToken = hashedToken;
+      user.verifyTokenExpiry = Date.now() + 3600000; // 1 hour
     } else {
-      await User.findByIdAndUpdate(userId, {
-        forgotPasswordToken: token,
-        forgotPasswordExpiry: Date.now() + 3600000,
-      });
+      user.resetPasswordToken = hashedToken;
+      user.resetPasswordExpiry = Date.now() + 3600000; // 1 hour
     }
 
+    await user.save();
+
+    // 🌐 base URL
     const baseUrl =
       process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
+    // 🔗 create link
     const url =
       emailType === "VERIFY"
-        ? `${baseUrl}/verifyemail?token=${token}`
-        : `${baseUrl}/resetpassword?token=${token}`;
+        ? `${baseUrl}/verifyemail?token=${rawToken}`
+        : `${baseUrl}/reset-password?token=${rawToken}`;
 
-    // styled email
+    // ✉️ styled email template
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 40px 0;">
         <div style="max-width: 500px; margin: auto; background: #ffffff; border-radius: 12px; padding: 30px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
 
           <h2 style="color: #1f2937; margin-bottom: 10px;">
-            ${emailType === "VERIFY" ? "Verify Your Email" : "Reset Your Password"}
+            ${
+              emailType === "VERIFY"
+                ? "Verify Your Email"
+                : "Reset Your Password"
+            }
           </h2>
 
           <p style="color: #6b7280; font-size: 14px; margin-bottom: 25px;">
@@ -88,6 +102,7 @@ export const sendEmail = async ({
       </div>
     `;
 
+    // 📤 send email
     const mailResponse = await transport.sendMail({
       from: "YourApp <noreply@yourapp.com>",
       to: email,
@@ -98,9 +113,11 @@ export const sendEmail = async ({
       html: htmlContent,
     });
 
+    console.log("Mail sent:", mailResponse.messageId);
+
     return mailResponse;
   } catch (error: any) {
-    console.log("Error sending email: ", error.message);
+    console.log("Error sending email:", error.message);
     throw new Error(error.message);
   }
 };
