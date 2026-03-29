@@ -1,5 +1,5 @@
 import { connectToDb } from "@/db/dbConfig";
-import { User } from "@/models/userModel";
+import  User  from "@/models/userModel";
 import { sendEmail } from "@/helpers/mailer";
 import { NextResponse , NextRequest } from "next/server";
 import crypto from "crypto";
