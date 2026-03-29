@@ -7,7 +7,8 @@ export async function POST(request: NextRequest) {
   try {
     await connectToDb();
 
-    const { email } = await request.json();
+    const { email, type } = await request.json();
+    // type = "LINK" | "OTP"
 
     if (!email) {
       return NextResponse.json(
@@ -23,6 +24,28 @@ export async function POST(request: NextRequest) {
         { error: "User not found" },
         { status: 400 }
       );
+    }
+
+    // 🔥 OTP FLOW
+    if (type === "OTP") {
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+      user.resetPasswordOtp = otp;
+      user.resetPasswordOtpExpiry = Date.now() + 10 * 60 * 1000; // 10 min
+
+      await user.save();
+
+      await sendEmail({
+        email: user.email,
+        emailType: "RESET_OTP",
+        userId: user._id.toString(),
+        otp, // 👈 pass OTP
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "OTP sent to email",
+      });
     }
 
     await sendEmail({

@@ -15,101 +15,99 @@ export const sendEmail = async ({
   email,
   emailType,
   userId,
+  otp,
 }: {
   email: string;
-  emailType: "VERIFY" | "RESET";
+  emailType: "VERIFY" | "RESET" | "RESET_OTP";
   userId: string;
+  otp?: string;
 }) => {
   try {
-    // 🔐 generate tokens
-    const rawToken = crypto.randomBytes(32).toString("hex");
-
-    const hashedToken = crypto
-      .createHash("sha256")
-      .update(rawToken)
-      .digest("hex");
-
-    // 🧠 find user
     const user = await User.findById(userId);
     if (!user) throw new Error("User not found");
 
-    // 🧾 store hashed token in DB
-    if (emailType === "VERIFY") {
-      user.verifyToken = hashedToken;
-      user.verifyTokenExpiry = Date.now() + 3600000; // 1 hour
-    } else {
-      user.resetPasswordToken = hashedToken;
-      user.resetPasswordExpiry = Date.now() + 3600000; // 1 hour
-    }
+    let htmlContent = "";
+    let subject = "";
 
-    await user.save();
-
-    // 🌐 base URL
     const baseUrl =
       process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
-    // 🔗 create link
-    const url =
-      emailType === "VERIFY"
-        ? `${baseUrl}/verifyemail?token=${rawToken}`
-        : `${baseUrl}/reset-password?token=${rawToken}`;
+    // 🔥 VERIFY EMAIL (TOKEN)
+    if (emailType === "VERIFY") {
+      const rawToken = crypto.randomBytes(32).toString("hex");
 
-    // ✉️ styled email template
-    const htmlContent = `
-      <div style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 40px 0;">
-        <div style="max-width: 500px; margin: auto; background: #ffffff; border-radius: 12px; padding: 30px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+      const hashedToken = crypto
+        .createHash("sha256")
+        .update(rawToken)
+        .digest("hex");
 
-          <h2 style="color: #1f2937; margin-bottom: 10px;">
-            ${
-              emailType === "VERIFY"
-                ? "Verify Your Email"
-                : "Reset Your Password"
-            }
-          </h2>
+      user.verifyToken = hashedToken;
+      user.verifyTokenExpiry = Date.now() + 3600000;
 
-          <p style="color: #6b7280; font-size: 14px; margin-bottom: 25px;">
-            ${
-              emailType === "VERIFY"
-                ? "Thanks for signing up! Please confirm your email address."
-                : "We received a request to reset your password."
-            }
-          </p>
+      await user.save();
 
-          <a href="${url}" 
-             style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600;">
-            ${
-              emailType === "VERIFY"
-                ? "Verify Email"
-                : "Reset Password"
-            }
-          </a>
+      const url = `${baseUrl}/verifyemail?token=${rawToken}`;
 
-          <p style="margin-top: 25px; font-size: 12px; color: #9ca3af;">
-            This link will expire in 1 hour.
-          </p>
+      subject = "Verify your email";
 
-          <hr style="margin: 25px 0; border: none; border-top: 1px solid #e5e7eb;" />
+      htmlContent = `
+        <h2>Verify Your Email</h2>
+        <a href="${url}">Verify Email</a>
+        <p>This link expires in 1 hour.</p>
+      `;
+    }
 
-          <p style="font-size: 12px; color: #9ca3af;">
-            If the button doesn’t work, copy and paste this link:
-          </p>
+    // 🔥 RESET PASSWORD (TOKEN LINK)
+    else if (emailType === "RESET") {
+      const rawToken = crypto.randomBytes(32).toString("hex");
 
-          <p style="word-break: break-all; font-size: 12px; color: #2563eb;">
-            ${url}
-          </p>
+      const hashedToken = crypto
+        .createHash("sha256")
+        .update(rawToken)
+        .digest("hex");
 
+      user.resetPasswordToken = hashedToken;
+      user.resetPasswordExpiry = Date.now() + 3600000;
+
+      await user.save();
+
+      const url = `${baseUrl}/reset-password?token=${rawToken}`;
+
+      subject = "Reset your password";
+
+      htmlContent = `
+        <h2>Reset Password</h2>
+        <a href="${url}">Reset Password</a>
+        <p>This link expires in 1 hour.</p>
+      `;
+    }
+
+    // 🔥 OTP RESET
+    else if (emailType === "RESET_OTP") {
+      if (!otp) throw new Error("OTP not provided");
+
+      user.resetPasswordOtp = otp;
+      user.resetPasswordOtpExpiry = Date.now() + 10 * 60 * 1000;
+
+      await user.save();
+
+      subject = "Your OTP for Password Reset";
+
+      htmlContent = `
+        <div style="text-align:center">
+          <h2>Password Reset OTP</h2>
+          <p>Your OTP is:</p>
+          <h1 style="letter-spacing:4px;">${otp}</h1>
+          <p>This OTP expires in 10 minutes.</p>
         </div>
-      </div>
-    `;
+      `;
+    }
 
     // 📤 send email
     const mailResponse = await transport.sendMail({
       from: "YourApp <noreply@yourapp.com>",
       to: email,
-      subject:
-        emailType === "VERIFY"
-          ? "Verify your email"
-          : "Reset your password",
+      subject,
       html: htmlContent,
     });
 

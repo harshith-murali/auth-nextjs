@@ -1,6 +1,6 @@
 "use client";
-export const dynamic = "force-dynamic";
 
+export const dynamic = "force-dynamic";
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -9,35 +9,44 @@ import toast from "react-hot-toast";
 
 function ResetPasswordContent() {
   const params = useSearchParams();
-  const router = useRouter(); // ✅ FIXED (inside component)
+  const router = useRouter();
 
   const [token, setToken] = useState("");
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ✅ get token after mount
+  // ✅ detect token (if user came from email link)
   useEffect(() => {
     const t = params.get("token");
     if (t) setToken(t);
   }, [params]);
 
   const handleReset = async () => {
-    if (!token || !password) {
-      toast.error("Token and password are required");
-      return;
-    }
-
     try {
       setLoading(true);
 
-      await axios.post("/api/reset-password", {
-        token,
-        password,
-      });
+      if (token) {
+        await axios.post("/api/reset-password", {
+          token,
+          password,
+        });
+      } else {
+        if (!email || !otp) {
+          toast.error("Email and OTP are required");
+          setLoading(false);
+          return;
+        }
+
+        await axios.post("/api/reset-password", {
+          email,
+          otp,
+          password,
+        });
+      }
 
       toast.success("Password updated!");
-
-      // ✅ redirect after success
       router.push("/login");
 
     } catch (error: any) {
@@ -55,6 +64,25 @@ function ResetPasswordContent() {
           Reset Password
         </h1>
 
+        {!token && (
+          <>
+            <input
+              type="email"
+              placeholder="Enter your email"
+              className="w-full p-3 border rounded-lg mb-3"
+              onChange={(e) => setEmail(e.target.value)}
+            />
+
+            <input
+              type="text"
+              placeholder="Enter OTP"
+              className="w-full p-3 border rounded-lg mb-3"
+              onChange={(e) => setOtp(e.target.value)}
+            />
+          </>
+        )}
+
+        {/* Password field */}
         <input
           type="password"
           placeholder="New password"
