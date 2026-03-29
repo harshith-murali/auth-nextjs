@@ -8,37 +8,66 @@ export async function POST(request: NextRequest) {
   try {
     await connectToDb();
 
-    const { token, password } = await request.json();
+    const { token, email, otp, password } = await request.json();
 
-    if (!token || !password) {
+    // 🔒 basic validation
+    if (!password) {
       return NextResponse.json(
-        { error: "Token and password are required" },
+        { error: "Password is required" },
         { status: 400 }
       );
     }
 
-    const hashedToken = crypto
-      .createHash("sha256")
-      .update(token)
-      .digest("hex");
+    let user;
 
-    const user = await User.findOne({
-      resetPasswordToken: hashedToken,
-      resetPasswordExpiry: { $gt: Date.now() },
-    });
+    // 🔥 TOKEN FLOW (link reset)
+    if (token) {
+      const hashedToken = crypto
+        .createHash("sha256")
+        .update(token)
+        .digest("hex");
 
+      user = await User.findOne({
+        resetPasswordToken: hashedToken,
+        resetPasswordExpiry: { $gt: Date.now() },
+      });
+    }
+
+    // 🔥 OTP FLOW
+    else if (email && otp) {
+      user = await User.findOne({
+        email,
+        resetPasswordOtp: otp,
+        resetPasswordOtpExpiry: { $gt: Date.now() },
+      });
+    }
+
+    // ❌ invalid request
+    else {
+      return NextResponse.json(
+        { error: "Invalid request" },
+        { status: 400 }
+      );
+    }
+
+    // ❌ no user found
     if (!user) {
       return NextResponse.json(
-        { error: "Invalid or expired token" },
+        { error: "Invalid or expired credentials" },
         { status: 400 }
       );
     }
 
+    // 🔐 hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     user.password = hashedPassword;
+
+    // 🧹 clear ALL reset fields
     user.resetPasswordToken = undefined;
     user.resetPasswordExpiry = undefined;
+    user.resetPasswordOtp = undefined;
+    user.resetPasswordOtpExpiry = undefined;
 
     await user.save();
 
