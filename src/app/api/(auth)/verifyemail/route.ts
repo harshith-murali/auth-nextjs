@@ -1,13 +1,13 @@
-import {connectToDb} from "@/db/dbConfig";
+import { connectToDb } from "@/db/dbConfig";
 import User from "@/models/userModel";
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 
 export async function POST(request: NextRequest) {
   try {
     await connectToDb();
 
-    const reqBody = await request.json();
-    const { token } = reqBody;
+    const { token } = await request.json();
 
     if (!token) {
       return NextResponse.json(
@@ -16,9 +16,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // find user with the token and check if token is not expired
+    // 🔥 HASH the incoming token
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
     const user = await User.findOne({
-      verifyToken: token,
+      verifyToken: hashedToken,
       verifyTokenExpiry: { $gt: Date.now() },
     });
 
@@ -29,16 +34,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ✅ update user to set email as verified and remove token fields
+    // ✅ verify user
     user.isVerified = true;
     user.verifyToken = undefined;
     user.verifyTokenExpiry = undefined;
+
     await user.save();
 
     return NextResponse.json({
       success: true,
       message: "Email verified successfully",
     });
+
   } catch (error: any) {
     return NextResponse.json(
       { success: false, error: "Server error" },
