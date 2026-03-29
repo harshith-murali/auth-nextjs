@@ -1,29 +1,27 @@
 import { connectToDb } from "@/db/dbConfig";
-import  User  from "@/models/userModel";
-import { sendEmail } from "@/helpers/mailer";
-import { NextResponse , NextRequest } from "next/server";
+import User from "@/models/userModel";
+import { NextResponse, NextRequest } from "next/server";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 
 export async function POST(request: NextRequest) {
   try {
     await connectToDb();
 
-    const { token, newPassword } = await request.json();
+    const { token, password } = await request.json();
 
-    if (!token || !newPassword) {
+    if (!token || !password) {
       return NextResponse.json(
-        { error: "Token and new password are required" },
+        { error: "Token and password are required" },
         { status: 400 }
       );
     }
 
-    // Hash the received token
     const hashedToken = crypto
       .createHash("sha256")
       .update(token)
       .digest("hex");
 
-    // Find user with matching reset token and valid expiry
     const user = await User.findOne({
       resetPasswordToken: hashedToken,
       resetPasswordExpiry: { $gt: Date.now() },
@@ -36,8 +34,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update user's password and clear reset token fields
-    user.password = newPassword;
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    user.password = hashedPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpiry = undefined;
 
@@ -48,12 +47,12 @@ export async function POST(request: NextRequest) {
       message: "Password reset successful",
     });
 
-    } catch (error: any) {
-      console.log("Reset password error:", error.message);
+  } catch (error: any) {
+    console.log("Reset password error:", error.message);
 
-      return NextResponse.json(
-        { error: "Something went wrong" },
-        { status: 500 }
-       );
-    }
+    return NextResponse.json(
+      { error: "Something went wrong" },
+      { status: 500 }
+    );
+  }
 }

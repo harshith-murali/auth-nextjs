@@ -1,19 +1,31 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { useRouter } from "next/navigation";
 
-// 🔹 Inner component (actual logic)
+const router = useRouter();
 function ResetPasswordContent() {
   const params = useSearchParams();
-  const token = params.get("token");
 
+  const [token, setToken] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // ✅ FIX: set token after mount
+  useEffect(() => {
+    const t = params.get("token");
+    if (t) setToken(t);
+  }, [params]);
+
   const handleReset = async () => {
+    if (!token || !password) {
+      toast.error("Token and password are required");
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -23,6 +35,7 @@ function ResetPasswordContent() {
       });
 
       toast.success("Password updated!");
+      router.push("/login");
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Error occurred");
     } finally {
@@ -33,10 +46,7 @@ function ResetPasswordContent() {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-200 to-gray-100">
       <div className="bg-white shadow-xl rounded-2xl p-8 w-full max-w-md">
-        
-        <h1 className="text-2xl font-bold text-center mb-6">
-          Reset Password
-        </h1>
+        <h1 className="text-2xl font-bold text-center mb-6">Reset Password</h1>
 
         <input
           type="password"
@@ -49,11 +59,7 @@ function ResetPasswordContent() {
           onClick={handleReset}
           disabled={loading}
           className={`w-full py-3 rounded-lg text-white font-semibold
-            ${
-              loading
-                ? "bg-gray-400"
-                : "bg-blue-600 hover:bg-blue-700"
-            }`}
+            ${loading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}`}
         >
           {loading ? "Updating..." : "Reset Password"}
         </button>
@@ -62,7 +68,6 @@ function ResetPasswordContent() {
   );
 }
 
-// 🔹 Export wrapped in Suspense
 export default function ResetPassword() {
   return (
     <Suspense fallback={<p className="text-center mt-10">Loading...</p>}>
